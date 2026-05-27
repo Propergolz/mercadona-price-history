@@ -105,3 +105,11 @@ def _nested(value: dict[str, Any], keys: list[str]) -> Any:
         if not isinstance(current, dict):
             return None
         current
+
+def _to_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
