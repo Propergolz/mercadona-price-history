@@ -9,6 +9,34 @@ from typing import Any
 import pandas as pd
 
 
+SPANISH_COLUMN_NAMES = {
+    "snapshot_date": "fecha_snapshot",
+    "extraction_timestamp": "marca_temporal_extraccion",
+    "location_id": "id_ubicacion",
+    "province": "provincia",
+    "postal_code": "codigo_postal",
+    "warehouse_code": "codigo_almacen",
+    "section_id": "id_seccion",
+    "section_name": "seccion",
+    "category_id": "id_categoria",
+    "category_name": "categoria",
+    "product_id": "id_producto",
+    "product_name": "producto",
+    "brand": "marca",
+    "packaging": "formato_envase",
+    "thumbnail": "imagen",
+    "share_url": "url_producto",
+    "price": "precio",
+    "unit_price": "precio_referencia",
+    "unit_size": "cantidad_unidad",
+    "size_format": "formato_cantidad",
+    "tax_percentage": "porcentaje_iva",
+    "is_new": "es_novedad",
+    "is_available": "disponible",
+    "raw_product": "producto_json",
+}
+
+
 def write_raw_json(
     payload: dict[str, Any],
     *,
@@ -36,7 +64,7 @@ def write_snapshot_parquet(
     snapshot_dir.mkdir(parents=True, exist_ok=True)
     path = snapshot_dir / f"{location_id}.parquet"
     dataframe = pd.DataFrame(rows)
-    dataframe["raw_product"] = dataframe["raw_product"].apply(
+    dataframe["producto_json"] = dataframe["producto_json"].apply(
         lambda value: json.dumps(value, ensure_ascii=False)
     )
     dataframe.to_parquet(path, index=False)
@@ -49,10 +77,10 @@ def rebuild_consolidated_parquet(*, data_dir: Path) -> Path | None:
     if not files:
         return None
 
-    frames = [pd.read_parquet(path) for path in files]
+    frames = [normalize_column_names(pd.read_parquet(path)) for path in files]
     consolidated = pd.concat(frames, ignore_index=True)
     consolidated = consolidated.drop_duplicates(
-        subset=["snapshot_date", "location_id", "product_id"],
+        subset=["fecha_snapshot", "id_ubicacion", "id_producto"],
         keep="last",
     )
 
@@ -67,6 +95,10 @@ def write_powerbi_csv(dataframe: pd.DataFrame, *, data_dir: Path) -> Path:
     output_path = data_dir / "powerbi" / "mercadona_product_snapshots.csv"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    export = dataframe.drop(columns=["raw_product"], errors="ignore")
+    export = dataframe.drop(columns=["producto_json"], errors="ignore")
     export.to_csv(output_path, index=False, encoding="utf-8")
     return output_path
+
+
+def normalize_column_names(dataframe: pd.DataFrame) -> pd.DataFrame:
+    return dataframe.rename(columns=SPANISH_COLUMN_NAMES)
