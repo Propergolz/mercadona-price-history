@@ -9,32 +9,32 @@ from typing import Any
 import pandas as pd
 
 
-SPANISH_COLUMN_NAMES = {
-    "snapshot_date": "fecha_snapshot",
-    "extraction_timestamp": "marca_temporal_extraccion",
-    "location_id": "id_ubicacion",
-    "province": "provincia",
-    "postal_code": "codigo_postal",
-    "warehouse_code": "codigo_almacen",
-    "section_id": "id_seccion",
-    "section_name": "seccion",
-    "category_id": "id_categoria",
-    "category_name": "categoria",
-    "product_id": "id_producto",
-    "product_name": "producto",
-    "brand": "marca",
-    "packaging": "formato_envase",
-    "thumbnail": "imagen",
-    "share_url": "url_producto",
-    "price": "precio",
-    "unit_price": "precio_referencia",
-    "unit_size": "cantidad_unidad",
-    "size_format": "formato_cantidad",
-    "tax_percentage": "porcentaje_iva",
-    "is_new": "es_novedad",
-    "is_available": "disponible",
-    "raw_product": "producto_json",
-}
+POWERBI_COLUMNS = [
+    "fecha_snapshot",
+    "marca_temporal_extraccion",
+    "id_ubicacion",
+    "provincia",
+    "codigo_postal",
+    "codigo_almacen",
+    "id_seccion",
+    "seccion",
+    "id_categoria",
+    "categoria",
+    "id_producto",
+    "producto",
+    "slug",
+    "marca",
+    "formato_envase",
+    "url_imagen",
+    "url_producto",
+    "precio",
+    "precio_referencia",
+    "cantidad_unidad",
+    "formato_cantidad",
+    "porcentaje_iva",
+    "es_novedad",
+    "disponible",
+]
 
 
 def write_raw_json(
@@ -95,7 +95,12 @@ def write_powerbi_csv(dataframe: pd.DataFrame, *, data_dir: Path) -> Path:
     output_path = data_dir / "powerbi" / "mercadona_product_snapshots.csv"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    export = dataframe.drop(columns=["producto_json"], errors="ignore")
+    export = normalize_column_names(dataframe)
+    export = export.drop(columns=["iva", "producto_json"], errors="ignore")
+    for column in POWERBI_COLUMNS:
+        if column not in export.columns:
+            export[column] = None
+    export = export[POWERBI_COLUMNS]
     export.to_csv(output_path, index=False, encoding="utf-8")
     return output_path
 
