@@ -1,0 +1,2 @@
+"""Mercadona price history extractor."""
+

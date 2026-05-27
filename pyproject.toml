@@ -1,0 +1,14 @@
+[project]
+name = "mercadona-price-history"
+version = "0.1.0"
+description = "Daily Mercadona product price snapshots for Power BI analysis."
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.2.0",
+    "pyarrow>=15.0.0",
+    "requests>=2.31.0",
+]
+
+[tool.ruff]
+line-length = 100
+
