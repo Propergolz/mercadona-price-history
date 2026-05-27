@@ -62,31 +62,32 @@ def product_snapshot_row(
 ) -> dict[str, Any]:
     price = product.get("price_instructions") or {}
     return {
-        "snapshot_date": snapshot_date.isoformat(),
-        "extraction_timestamp": extraction_timestamp.astimezone(UTC).isoformat(),
-        "location_id": location_id,
-        "province": province,
-        "postal_code": postal_code,
-        "warehouse_code": warehouse_code,
-        "section_id": section_id,
-        "section_name": section_name,
-        "category_id": category_id,
-        "category_name": category_name,
-        "product_id": str(product.get("id")),
-        "product_name": product.get("display_name") or product.get("name"),
+        "fecha_snapshot": snapshot_date.isoformat(),
+        "marca_temporal_extraccion": extraction_timestamp.astimezone(UTC).isoformat(),
+        "id_ubicacion": location_id,
+        "provincia": province,
+        "codigo_postal": postal_code,
+        "codigo_almacen": warehouse_code,
+        "id_seccion": section_id,
+        "seccion": section_name,
+        "id_categoria": category_id,
+        "categoria": category_name,
+        "id_producto": str(product.get("id")),
+        "producto": product.get("display_name") or product.get("name"),
         "slug": product.get("slug"),
-        "brand": product.get("brand"),
-        "packaging": product.get("packaging"),
-        "thumbnail": _nested(product, ["thumbnail"]),
-        "share_url": product.get("share_url"),
-        "price": _to_float(price.get("unit_price")),
-        "unit_price": _to_float(price.get("bulk_price")),
-        "unit_size": price.get("unit_size"),
-        "size_format": price.get("size_format"),
-        "iva": price.get("iva"),
-        "is_new": product.get("is_new"),
-        "is_available": product.get("published", True),
-        "raw_product": product,
+        "marca": product.get("brand"),
+        "formato_envase": product.get("packaging"),
+        "imagen": _nested(product, ["thumbnail"]),
+        "url_producto": product.get("share_url"),
+        "precio": _to_float(price.get("unit_price")),
+        "precio_referencia": _to_float(price.get("bulk_price")),
+        "cantidad_unidad": price.get("unit_size"),
+        "formato_cantidad": price.get("size_format"),
+        "iva": _to_float(price.get("iva")),
+        "porcentaje_iva": _to_float(price.get("tax_percentage")),
+        "es_novedad": product.get("is_new"),
+        "disponible": product.get("published", True),
+        "producto_json": product,
     }
 
 
@@ -103,15 +104,4 @@ def _nested(value: dict[str, Any], keys: list[str]) -> Any:
     for key in keys:
         if not isinstance(current, dict):
             return None
-        current = current.get(key)
-    return current
-
-
-def _to_float(value: Any) -> float | None:
-    if value in (None, ""):
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
+        current
