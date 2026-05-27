@@ -59,5 +59,14 @@ def rebuild_consolidated_parquet(*, data_dir: Path) -> Path | None:
     output_path = data_dir / "parquet" / "mercadona_product_snapshots.parquet"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     consolidated.to_parquet(output_path, index=False)
+    write_powerbi_csv(consolidated, data_dir=data_dir)
     return output_path
 
+
+def write_powerbi_csv(dataframe: pd.DataFrame, *, data_dir: Path) -> Path:
+    output_path = data_dir / "powerbi" / "mercadona_product_snapshots.csv"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    export = dataframe.drop(columns=["raw_product"], errors="ignore")
+    export.to_csv(output_path, index=False, encoding="utf-8")
+    return output_path

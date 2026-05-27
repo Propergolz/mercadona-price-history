@@ -2,7 +2,13 @@
 
 ## Recomendacion
 
-Usa Power BI en modo Import sobre `data/parquet/mercadona_product_snapshots.parquet`.
+Para desarrollo local, usa Power BI en modo Import sobre `data/parquet/mercadona_product_snapshots.parquet`.
+
+Para refresco automatico en Power BI Service sin gateway ni PC encendido, usa la copia CSV:
+
+```text
+data/powerbi/mercadona_product_snapshots.csv
+```
 
 Power BI no debe ser la pieza que guarda historico. En este proyecto, GitHub Actions captura y guarda datos; Power BI solo lee el historico.
 
@@ -21,19 +27,22 @@ Esta opcion es buena para construir el informe, pero el refresco en Power BI Ser
 
 ## Opcion B: GitHub raw publico
 
-Si aceptas que el archivo Parquet sea publico, Power BI Service puede refrescarlo desde una URL raw.
+Si aceptas que el dataset sea publico, Power BI Service puede refrescar el CSV desde una URL raw sin gateway.
 
 Power Query:
 
 ```powerquery
 let
-    Source = Web.Contents("https://raw.githubusercontent.com/OWNER/REPO/main/data/parquet/mercadona_product_snapshots.parquet"),
-    Parquet = Parquet.Document(Source)
+    Source = Csv.Document(
+        Web.Contents("https://raw.githubusercontent.com/OWNER/REPO/main/data/powerbi/mercadona_product_snapshots.csv"),
+        [Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.Csv]
+    ),
+    PromotedHeaders = Table.PromoteHeaders(Source, [PromoteAllScalars=true])
 in
-    Parquet
+    PromotedHeaders
 ```
 
-Esta es la opcion mas simple para publicar un informe publico sin infraestructura adicional.
+Esta es la opcion mas simple para publicar un informe publico sin infraestructura adicional. Mantiene Parquet como historico tecnico y usa CSV como interfaz estable para Power BI.
 
 ## Opcion C: repo privado
 
@@ -94,4 +103,3 @@ Variacion % = DIVIDE([Variacion Precio], MAX('Snapshots'[price]) - [Variacion Pr
 3. Categorias: inflacion media por seccion/categoria.
 4. Provincias: comparativa territorial.
 5. Altas y bajas: productos nuevos o desaparecidos.
-

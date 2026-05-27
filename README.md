@@ -51,6 +51,7 @@ python scripts\capture_daily_snapshot.py
 - `data/raw/YYYY-MM-DD/<location_id>/`: respuestas JSON comprimidas.
 - `data/parquet/snapshots/snapshot_date=YYYY-MM-DD/<location_id>.parquet`: snapshot diario.
 - `data/parquet/mercadona_product_snapshots.parquet`: historico consolidado para Power BI.
+- `data/powerbi/mercadona_product_snapshots.csv`: copia limpia para refresco automatico en Power BI Service desde GitHub.
 
 ## Automatizacion diaria
 
@@ -77,4 +78,3 @@ DEFAULT_LOCATIONS = [
 ## Nota responsable
 
 Este proyecto usa endpoints observados de una API no oficial. Mantiene una frecuencia baja, cachea resultados historicos y evita endpoints de cuenta, autenticacion, carrito o datos personales.
-
