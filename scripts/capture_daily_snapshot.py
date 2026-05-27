@@ -129,7 +129,7 @@ def capture_location(
 def dedupe_snapshot_rows(rows: list[dict]) -> list[dict]:
     deduped: dict[tuple[str, str, str], dict] = {}
     for row in rows:
-        key = (row["snapshot_date"], row["location_id"], row["product_id"])
+        key = (row["fecha_snapshot"], row["id_ubicacion"], row["id_producto"])
         deduped.setdefault(key, row)
     return list(deduped.values())
 
