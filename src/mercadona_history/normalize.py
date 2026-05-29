@@ -77,7 +77,8 @@ def product_snapshot_row(
         "slug": product.get("slug"),
         "marca": product.get("brand"),
         "formato_envase": product.get("packaging"),
-      "url_imagen": product.get("thumbnail"),
+        "unidad_venta": build_sales_unit(product),
+        "url_imagen": product.get("thumbnail"),
         "url_producto": product.get("share_url"),
         "precio": _to_float(price.get("unit_price")),
         "precio_referencia": _to_float(price.get("bulk_price")),
@@ -90,6 +91,37 @@ def product_snapshot_row(
     }
 
 
+def build_sales_unit(product: dict[str, Any]) -> str | None:
+    price = product.get("price_instructions") or {}
+    packaging = product.get("packaging")
+    is_pack = price.get("is_pack") is True
+    total_units = price.get("total_units")
+    pack_size = price.get("pack_size")
+    unit_name = price.get("unit_name")
+    unit_size = price.get("unit_size")
+    size_format = price.get("size_format")
+
+    if is_pack:
+        unit_label = unit_name or "ud."
+        if total_units and pack_size and size_format:
+            return (
+                f"{_format_number(total_units)} {unit_label} "
+                f"x {_format_number(pack_size)} {size_format}"
+            )
+        if total_units and unit_label:
+            return f"{_format_number(total_units)} {unit_label}"
+
+    if packaging and unit_size and size_format:
+        return f"{packaging} {_format_number(unit_size)} {size_format}"
+    if unit_size and size_format:
+        return f"{_format_number(unit_size)} {size_format}"
+    if packaging:
+        return str(packaging)
+    if total_units and unit_name:
+        return f"{_format_number(total_units)} {unit_name}"
+    return None
+
+
 def unique_product_ids(products: Iterable[dict[str, Any]]) -> list[str]:
     return sorted({str(product["id"]) for product in products if product.get("id") is not None})
 
@@ -98,12 +130,16 @@ def _looks_like_product(value: dict[str, Any]) -> bool:
     return "price_instructions" in value and ("display_name" in value or "name" in value)
 
 
-def _nested(value: dict[str, Any], keys: list[str]) -> Any:
-    current: Any = value
-    for key in keys:
-        if not isinstance(current, dict):
-            return None
-        current
+def _format_number(value: Any) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+
+    if number.is_integer():
+        return str(int(number))
+    return f"{number:g}".replace(".", ",")
+
 
 def _to_float(value: Any) -> float | None:
     if value in (None, ""):
