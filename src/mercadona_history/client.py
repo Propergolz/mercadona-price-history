@@ -14,11 +14,13 @@ class MercadonaClient:
         lang: str = "es",
         delay_seconds: float = 0.4,
         timeout_seconds: int = 30,
+        max_retries: int = 3,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.lang = lang
         self.delay_seconds = delay_seconds
         self.timeout_seconds = timeout_seconds
+        self.max_retries = max_retries
         self.session = requests.Session()
         self.session.headers.update(
             {
@@ -56,9 +58,37 @@ class MercadonaClient:
         return self._request("GET", path, params=params).json()
 
     def _request(self, method: str, path: str, **kwargs: Any) -> requests.Response:
-        time.sleep(self.delay_seconds)
         url = f"{self.base_url}{path}"
-        response = self.session.request(method, url, timeout=self.timeout_seconds, **kwargs)
-        response.raise_for_status()
-        return response
+        last_error: Exception | None = None
+
+        for attempt in range(1, self.max_retries + 1):
+            time.sleep(self.delay_seconds)
+            try:
+                response = self.session.request(
+                    method,
+                    url,
+                    timeout=self.timeout_seconds,
+                    **kwargs,
+                )
+                response.raise_for_status()
+                return response
+            except (
+                requests.Timeout,
+                requests.ConnectionError,
+                requests.HTTPError,
+            ) as error:
+                last_error = error
+                status_code = getattr(getattr(error, "response", None), "status_code", None)
+                retryable_status = status_code in {429, 500, 502, 503, 504}
+                retryable_network = isinstance(error, (requests.Timeout, requests.ConnectionError))
+                if attempt == self.max_retries or not (retryable_status or retryable_network):
+                    raise
+                wait_seconds = min(30, 2**attempt)
+                print(
+                    f"Request failed ({method} {path}) attempt {attempt}/{self.max_retries}: "
+                    f"{error}. Retrying in {wait_seconds}s..."
+                )
+                time.sleep(wait_seconds)
+
+        raise RuntimeError(f"Request failed after retries: {method} {url}") from last_error
 
