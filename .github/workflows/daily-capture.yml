@@ -35,4 +35,4 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: 'data: daily Mercadona snapshot'
-          file_pattern: data/raw/**/*.gz data/parquet/snapshots/**/*.parquet data/powerbi/**/*.csv
+          file_pattern: data/raw/**/*.gz data/parquet/snapshots/**/*.parquet data/powerbi/*.csv data/powerbi/**/*.csv
