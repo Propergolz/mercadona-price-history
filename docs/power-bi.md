@@ -2,39 +2,100 @@
 
 ## Recomendacion
 
-Para desarrollo local, usa Power BI en modo Import sobre `data/parquet/mercadona_product_snapshots.parquet`.
+Power BI no debe guardar el historico. En este proyecto, GitHub Actions captura y guarda datos; Power BI solo lee el historico.
 
-Para refresco automatico en Power BI Service sin gateway ni PC encendido, usa la copia CSV:
-
-```text
-data/powerbi/mercadona_product_snapshots.csv
-```
-
-Power BI no debe ser la pieza que guarda historico. En este proyecto, GitHub Actions captura y guarda datos; Power BI solo lee el historico.
-
-## Opcion A: prototipo local
-
-1. Clona o descarga el repositorio.
-2. Abre Power BI Desktop.
-3. Elige `Obtener datos > Parquet`.
-4. Selecciona:
+La exportacion para Power BI esta normalizada en tres tablas:
 
 ```text
-C:\Users\sergi\Documents\mercadona-price-history\data\parquet\mercadona_product_snapshots.parquet
+data/powerbi/productos.csv
+data/powerbi/ubicaciones.csv
+data/powerbi/precios_diarios/fecha_snapshot=YYYY-MM-DD.csv
 ```
 
-Esta opcion es buena para construir el informe, pero el refresco en Power BI Service dependeria de un gateway si el archivo esta en tu PC.
+Esta estructura sustituye al CSV plano antiguo `mercadona_product_snapshots.csv`, que crecia demasiado y termino chocando con el limite practico de GitHub para archivos grandes.
 
-## Opcion B: GitHub raw publico
+## Modelo recomendado
 
-Si aceptas que el dataset sea publico, Power BI Service puede refrescar el CSV desde una URL raw sin gateway.
+Usa un modelo en estrella:
 
-Power Query:
+- `FactSnapshots`: precios diarios.
+- `DimProducto`: productos.
+- `DimUbicacion`: provincias/codigos postales.
+- `DimFecha`: calendario DAX.
+- `DimCategoria`: opcional, creada desde `DimProducto` si quieres separar seccion/categoria.
+
+Relaciones:
+
+```text
+FactSnapshots[id_producto]  -> DimProducto[id_producto]
+FactSnapshots[id_ubicacion] -> DimUbicacion[id_ubicacion]
+FactSnapshots[fecha_snapshot] -> DimFecha[Date]
+```
+
+## Archivos raw de GitHub
+
+Productos:
+
+```text
+https://raw.githubusercontent.com/Propergolz/mercadona-price-history/main/data/powerbi/productos.csv
+```
+
+Ubicaciones:
+
+```text
+https://raw.githubusercontent.com/Propergolz/mercadona-price-history/main/data/powerbi/ubicaciones.csv
+```
+
+Precios diarios:
+
+Los precios estan particionados por fecha dentro de:
+
+```text
+data/powerbi/precios_diarios/
+```
+
+Para leerlos desde Power BI Service sin gateway, usa la API publica de GitHub para listar los archivos y despues combina los CSV.
+
+## Consulta M para precios diarios
+
+```powerquery
+let
+    Source = Json.Document(
+        Web.Contents(
+            "https://api.github.com/repos/Propergolz/mercadona-price-history/contents/data/powerbi/precios_diarios?ref=main"
+        )
+    ),
+    Files = Table.FromList(Source, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+    Expanded = Table.ExpandRecordColumn(
+        Files,
+        "Column1",
+        {"name", "download_url"},
+        {"name", "download_url"}
+    ),
+    CsvFiles = Table.SelectRows(Expanded, each Text.EndsWith([name], ".csv")),
+    WithContent = Table.AddColumn(
+        CsvFiles,
+        "content",
+        each Csv.Document(
+            Web.Contents([download_url]),
+            [Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.Csv]
+        )
+    ),
+    Promoted = Table.TransformColumns(
+        WithContent,
+        {"content", each Table.PromoteHeaders(_, [PromoteAllScalars=true])}
+    ),
+    Combined = Table.Combine(Promoted[content])
+in
+    Combined
+```
+
+## Consulta M para productos
 
 ```powerquery
 let
     Source = Csv.Document(
-        Web.Contents("https://raw.githubusercontent.com/OWNER/REPO/main/data/powerbi/mercadona_product_snapshots.csv"),
+        Web.Contents("https://raw.githubusercontent.com/Propergolz/mercadona-price-history/main/data/powerbi/productos.csv"),
         [Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.Csv]
     ),
     PromotedHeaders = Table.PromoteHeaders(Source, [PromoteAllScalars=true])
@@ -42,58 +103,17 @@ in
     PromotedHeaders
 ```
 
-Esta es la opcion mas simple para publicar un informe publico sin infraestructura adicional. Mantiene Parquet como historico tecnico y usa CSV como interfaz estable para Power BI.
+## Consulta M para ubicaciones
 
-## Opcion C: repo privado
-
-Un repo privado es mejor para el codigo, pero complica el refresco automatico en Power BI Service porque Power BI necesita credenciales para leer el archivo.
-
-Se puede hacer con GitHub API y un token de acceso, pero hay que tratar ese token como secreto. Para un informe publicado de forma publica, normalmente no compensa proteger el dataset de origen si el propio informe expone los datos agregados y potencialmente el detalle.
-
-## Medidas DAX sugeridas
-
-Precio medio:
-
-```DAX
-Precio Medio = AVERAGE('Snapshots'[price])
-```
-
-Variacion absoluta vs snapshot anterior:
-
-```DAX
-Variacion Precio =
-VAR Producto = SELECTEDVALUE('Snapshots'[product_id])
-VAR Ubicacion = SELECTEDVALUE('Snapshots'[location_id])
-VAR FechaActual = MAX('Snapshots'[snapshot_date])
-VAR PrecioActual = MAX('Snapshots'[price])
-VAR FechaAnterior =
-    CALCULATE(
-        MAX('Snapshots'[snapshot_date]),
-        FILTER(
-            ALL('Snapshots'),
-            'Snapshots'[product_id] = Producto
-                && 'Snapshots'[location_id] = Ubicacion
-                && 'Snapshots'[snapshot_date] < FechaActual
-        )
-    )
-VAR PrecioAnterior =
-    CALCULATE(
-        MAX('Snapshots'[price]),
-        FILTER(
-            ALL('Snapshots'),
-            'Snapshots'[product_id] = Producto
-                && 'Snapshots'[location_id] = Ubicacion
-                && 'Snapshots'[snapshot_date] = FechaAnterior
-        )
-    )
-RETURN
-    PrecioActual - PrecioAnterior
-```
-
-Variacion porcentual:
-
-```DAX
-Variacion % = DIVIDE([Variacion Precio], MAX('Snapshots'[price]) - [Variacion Precio])
+```powerquery
+let
+    Source = Csv.Document(
+        Web.Contents("https://raw.githubusercontent.com/Propergolz/mercadona-price-history/main/data/powerbi/ubicaciones.csv"),
+        [Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.Csv]
+    ),
+    PromotedHeaders = Table.PromoteHeaders(Source, [PromoteAllScalars=true])
+in
+    PromotedHeaders
 ```
 
 ## Paginas recomendadas

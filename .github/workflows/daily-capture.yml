@@ -2,11 +2,15 @@ name: Daily Mercadona price capture
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '30 5 * * *'
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: daily-mercadona-price-capture
+  cancel-in-progress: false
 
 jobs:
   capture:
@@ -31,4 +35,4 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: 'data: daily Mercadona snapshot'
-          file_pattern: data/**/*.gz data/**/*.parquet data/**/*.csv
+          file_pattern: data/raw/**/*.gz data/parquet/snapshots/**/*.parquet data/powerbi/**/*.csv

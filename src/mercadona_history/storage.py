@@ -67,6 +67,42 @@ POWERBI_COLUMNS = [
     "disponible",
 ]
 
+POWERBI_PRODUCT_COLUMNS = [
+    "id_producto",
+    "producto",
+    "slug",
+    "marca",
+    "formato_envase",
+    "unidad_venta",
+    "url_imagen",
+    "url_producto",
+    "id_seccion",
+    "seccion",
+    "id_categoria",
+    "categoria",
+    "porcentaje_iva",
+]
+
+POWERBI_LOCATION_COLUMNS = [
+    "id_ubicacion",
+    "provincia",
+    "codigo_postal",
+    "codigo_almacen",
+]
+
+POWERBI_DAILY_PRICE_COLUMNS = [
+    "fecha_snapshot",
+    "marca_temporal_extraccion",
+    "id_producto",
+    "id_ubicacion",
+    "precio",
+    "precio_referencia",
+    "cantidad_unidad",
+    "formato_cantidad",
+    "es_novedad",
+    "disponible",
+]
+
 
 def write_raw_json(
     payload: dict[str, Any],
@@ -134,7 +170,7 @@ def rebuild_consolidated_parquet(*, data_dir: Path) -> Path | None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     consolidated.to_parquet(output_path, index=False)
 
-    write_powerbi_csv(consolidated, data_dir=data_dir)
+    write_powerbi_tables(consolidated, data_dir=data_dir)
     return output_path
 
 
@@ -152,6 +188,65 @@ def write_powerbi_csv(dataframe: pd.DataFrame, *, data_dir: Path) -> Path:
     export = export[POWERBI_COLUMNS]
     export.to_csv(output_path, index=False, encoding="utf-8")
     return output_path
+
+
+def write_powerbi_tables(dataframe: pd.DataFrame, *, data_dir: Path) -> list[Path]:
+    powerbi_dir = data_dir / "powerbi"
+    prices_dir = powerbi_dir / "precios_diarios"
+    powerbi_dir.mkdir(parents=True, exist_ok=True)
+    prices_dir.mkdir(parents=True, exist_ok=True)
+
+    export = normalize_column_names(dataframe)
+    export = export.drop(columns=["iva", "producto_json"], errors="ignore")
+    if "fecha_snapshot" in export.columns:
+        export["fecha_snapshot"] = pd.to_datetime(export["fecha_snapshot"]).dt.strftime("%Y-%m-%d")
+
+    products = _select_powerbi_columns(export, POWERBI_PRODUCT_COLUMNS + ["fecha_snapshot"])
+    products = products.dropna(subset=["id_producto"])
+    products = products.sort_values(["id_producto", "fecha_snapshot"], na_position="last")
+    products = products.drop_duplicates(subset=["id_producto"], keep="last")
+    products = products[POWERBI_PRODUCT_COLUMNS]
+
+    locations = _select_powerbi_columns(export, POWERBI_LOCATION_COLUMNS)
+    locations = locations.dropna(subset=["id_ubicacion"])
+    locations = locations.drop_duplicates(subset=["id_ubicacion"], keep="last")
+    locations = locations.sort_values("id_ubicacion")
+
+    prices = _select_powerbi_columns(export, POWERBI_DAILY_PRICE_COLUMNS)
+    prices = prices.dropna(subset=["fecha_snapshot", "id_ubicacion", "id_producto"])
+    prices = prices.drop_duplicates(
+        subset=["fecha_snapshot", "id_ubicacion", "id_producto"],
+        keep="last",
+    )
+    prices = prices.sort_values(["fecha_snapshot", "id_ubicacion", "id_producto"])
+
+    output_paths = [
+        powerbi_dir / "productos.csv",
+        powerbi_dir / "ubicaciones.csv",
+    ]
+    products.to_csv(output_paths[0], index=False, encoding="utf-8")
+    locations.to_csv(output_paths[1], index=False, encoding="utf-8")
+
+    written_price_files: list[Path] = []
+    for snapshot_date, daily_prices in prices.groupby("fecha_snapshot", dropna=False):
+        if pd.isna(snapshot_date):
+            continue
+
+        filename = f"fecha_snapshot={snapshot_date}.csv"
+        output_path = prices_dir / filename
+        daily_prices.to_csv(output_path, index=False, encoding="utf-8")
+        written_price_files.append(output_path)
+
+    return output_paths + written_price_files
+
+
+def _select_powerbi_columns(dataframe: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    selected = dataframe.copy()
+    for column in columns:
+        if column not in selected.columns:
+            selected[column] = None
+
+    return selected[columns]
 
 
 def normalize_column_names(dataframe: pd.DataFrame) -> pd.DataFrame:
